@@ -12,7 +12,7 @@ from .options_flow import EzloOptionsFlowHandler  # Import options flow
 _LOGGER = logging.getLogger(__name__)
 
 
-class ExampleConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class EzloConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Ezlo HA Cloud."""
 
     VERSION = 1
