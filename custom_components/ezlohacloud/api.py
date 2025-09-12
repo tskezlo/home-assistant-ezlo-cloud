@@ -63,6 +63,7 @@ async def authenticate(username, password, uuid):
                 "error": None,
             }
         _LOGGER.warning("Login failed: %s", data)
+        _LOGGER.warning("response error: %s", response.reason_phrase())
         return {"success": False, "data": None, "error": "Invalid credentials"}
 
     except (httpx.RequestError, httpx.HTTPStatusError, ValueError, binascii.Error) as e:
