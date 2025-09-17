@@ -34,3 +34,8 @@ After installation, you can configure the integration through the Home Assistant
 2. Click **Add Integration**
 3. Search for "Ezlo HA Cloud"
 4. Follow the configuration flow
+
+## TODO:
+
+- Fix login issue, routing 401 Unauthorized.
+- Signup 

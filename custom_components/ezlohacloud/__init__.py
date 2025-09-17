@@ -137,8 +137,8 @@ async def check_binary_current(binary_path: Path, version: str) -> bool:
             proc.kill()
             await proc.communicate()
             return False
-
-    except (OSError, asyncio.SubprocessError) as err:
+    
+    except (OSError, subprocess.SubprocessError) as err:
         _LOGGER.debug("Version check error: %s", err)
         return False
     else:
