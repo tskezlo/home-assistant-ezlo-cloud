@@ -116,15 +116,16 @@ async def start_frpc(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         process = await hass.async_add_executor_job(
             subprocess.Popen, [binary_path, "-c", config_path]
         )
+        
+        # Store process reference using entry.entry_id
+        hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
+            "process": process,
+            "config_path": config_path,
+            "binary_path": binary_path,
+        }
     except Exception as err:
         _LOGGER.error("Configuration failed: %s", err)
-
-    # Store process reference using entry.entry_id
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
-        "process": process,
-        "config_path": config_path,
-        "binary_path": binary_path,
-    }
+        return
 
     # Register cleanup with proper closure variables
     async def async_shutdown(event):
@@ -178,7 +179,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return True
 
     data = hass.data[DOMAIN].pop(entry.entry_id)
-    process = data["process"]
+    process = data.get("process")
+    
+    if not process:
+        _LOGGER.warning("No process found for entry %s", entry.entry_id)
+        return True
 
     try:
         process.terminate()

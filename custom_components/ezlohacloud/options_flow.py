@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers.instance_id import async_get
 
 from .api import (
     authenticate,
@@ -120,7 +121,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             username = user_input["username"]
             password = user_input["password"]
 
-            system_uuid = await self.hass.helpers.instance_id.async_get() or ""
+            system_uuid = await async_get(self.hass) or ""
             if not system_uuid:
                 system_uuid = ""
                 _LOGGER.warning("Home Assistant system_uuid missing!")
@@ -178,7 +179,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             email = user_input["email"]
             password = user_input["password"]
 
-            system_uuid = await self.hass.helpers.instance_id.async_get() or ""
+            system_uuid = await async_get(self.hass) or ""
             if not system_uuid:
                 system_uuid = ""
                 _LOGGER.warning("Home Assistant system_uuid missing!")
