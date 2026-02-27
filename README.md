@@ -17,7 +17,7 @@ A Home Assistant integration for Ezlo Cloud connectivity.
 ### Option 2: Manual Installation
 
 1. Download the latest release from the [releases page](https://github.com/tskezlo/home-assistant-ezlo-cloud/releases)
-2. Extract the `ezlocloud` folder to your `custom_components` directory
+2. Extract the `ezlohacloud` folder to your `custom_components` directory
 3. Restart Home Assistant
 
 ### Option 3: Direct Install Button
