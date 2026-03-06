@@ -1,0 +1,8 @@
+serverAddr = "152.42.152.93"
+serverPort = 7000
+
+[[proxies]]
+name = "proxy-tcp-tunnel-frptest1"
+type = "http"
+localPort = 8123
+subdomain = "frptest1"
