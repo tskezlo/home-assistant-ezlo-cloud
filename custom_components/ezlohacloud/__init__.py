@@ -9,16 +9,13 @@ import subprocess
 import tarfile
 import tempfile
 
-import aiohttp
 import requests
-import tomli
-import tomli_w
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import DOMAIN, EZLO_API_URI
+from .const import DOMAIN
 from .frp_helpers import fetch_and_update_frp_config, start_frpc
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,22 +92,21 @@ def _sync_install_frpc(version: str, machine: str, binary_path: Path) -> str:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
         except requests.RequestException as err:
-            raise FrpcInstallError(f"Download failed: {err}") from err  # noqa: TRY002
+            raise FrpcInstallError(f"Download failed: {err}") from err
 
-        # Extract binary
+        # Extract and install binary
         try:
             with tarfile.open(tar_path, "r:gz") as tar:
                 members = [m for m in tar.getmembers() if m.name.endswith("/frpc")]
                 if not members:
                     raise FrpcInstallError("No frpc binary found in release package")
-                tar.extract(members[0], path=temp_dir)
+                tar.extract(members[0], path=temp_dir, filter="data")
+
+            extracted_bin = Path(temp_dir) / members[0].name
+            shutil.copy(extracted_bin, binary_path)
+            binary_path.chmod(0o755)
         except tarfile.TarError as err:
             raise FrpcInstallError(f"Extraction failed: {err}") from err
-
-        # Install binary
-        extracted_bin = Path(temp_dir) / members[0].name
-        shutil.copy(extracted_bin, binary_path)
-        binary_path.chmod(0o755)
 
     _LOGGER.info("Successfully installed FRPC to %s", binary_path)
     return str(binary_path)
@@ -193,82 +189,6 @@ def get_config_data(hass: HomeAssistant) -> dict:
     """Get the configuration data dictionary."""
     entry = get_config_entry(hass)
     return entry.data
-
-
-async def generate_config_file(
-    hass: HomeAssistant, config: dict, config_path: str
-) -> None:
-    """Generate FRPC configuration file."""
-    default_config = Path(__file__).parent / "config" / "frpc.toml"
-
-    auth_data = get_config_data(hass)
-    token = auth_data["auth_token"]
-    is_logged_in = auth_data["is_logged_in"]
-
-    if not is_logged_in and not token:
-        return
-
-    try:
-        # Fetch configuration from API
-        async with (
-            aiohttp.ClientSession() as session,
-            session.get(
-                f"{EZLO_API_URI}/api/user/{token}/server-config", timeout=10
-            ) as response,
-        ):
-            response.raise_for_status()
-            api_config = await response.json()
-
-        # Extract server configuration from nested structure
-        server_config = api_config["serverConfig"]
-
-        # Build TOML structure matching YAML format
-        config_data = {
-            "serverAddr": server_config["serverAddr"],
-            "serverPort": server_config["serverPort"],
-            "proxies": [],
-        }
-
-        # Add proxies with array-of-tables syntax
-        for proxy in server_config["proxies"]:
-            config_data["proxies"].append(
-                {
-                    "name": proxy["name"],
-                    "type": proxy["type"],
-                    "localPort": proxy["localPort"],
-                    "subdomain": proxy["subdomain"],
-                }
-            )
-
-        # Write TOML file using async executor
-        def _sync_write():
-            with open(config_path, "wb") as f:
-                tomli_w.dump(config_data, f)
-
-        await hass.async_add_executor_job(_sync_write)
-
-    except KeyError as err:
-        _LOGGER.error("Missing expected key in API response: %s", err)
-        raise
-    except aiohttp.ClientError as err:
-        _LOGGER.error("API request failed: %s", err)
-        raise
-    except Exception as err:
-        _LOGGER.error("Configuration generation failed: %s", err)
-        raise
-
-    def _sync_read():
-        with open(default_config, "rb") as f:
-            return tomli.load(f)
-
-    config_data = await hass.async_add_executor_job(_sync_read)
-
-    logging.info("config file path: %s", default_config)
-    logging.warning("config data: %s", config_data)
-
-    # Update configuration values
-    config_data["serverAddr"] = config["serverAddr"]
-    config_data["serverPort"] = config["serverPort"]
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

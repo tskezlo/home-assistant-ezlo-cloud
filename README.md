@@ -39,3 +39,8 @@ After installation, you can configure the integration through the Home Assistant
 
 - Fix login issue, routing 401 Unauthorized.
 - Signup 
+
+## Copy from Docker
+```
+docker cp naughty_darwin:/workspaces/core/homeassistant/components/ezlohacloud/. /home/tamilselvank/Documents/GitLab/homeassistant/home-assistant-ezlo-cloud/custom_components/ezlohacloud
+```

@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 
 import aiohttp
+from aiohttp import ClientTimeout
 from tomlkit import aot, document, dumps, table
 
 from homeassistant.config_entries import ConfigEntry
@@ -54,7 +55,7 @@ async def fetch_and_update_frp_config(
             aiohttp.ClientSession() as session,
             session.get(
                 f"{EZLO_API_URI}/api/user/{uuid}/server-config",
-                timeout=10,
+                timeout=ClientTimeout(total=10),
                 headers={"Authorization": f"Bearer {token}"},
             ) as response,
         ):

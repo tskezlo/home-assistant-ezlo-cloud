@@ -71,7 +71,9 @@ async def authenticate(username, password, uuid):
             error_msg = error_data.get("error", e.response.text)
         except (ValueError, KeyError):
             error_msg = e.response.text
-        _LOGGER.error("Auth request failed (HTTP %s): %s", e.response.status_code, error_msg)
+        _LOGGER.error(
+            "Auth request failed (HTTP %s): %s", e.response.status_code, error_msg
+        )
         return {"success": False, "data": None, "error": error_msg}
     except (httpx.RequestError, ValueError, binascii.Error) as e:
         _LOGGER.error("Auth request failed: %s", e)
