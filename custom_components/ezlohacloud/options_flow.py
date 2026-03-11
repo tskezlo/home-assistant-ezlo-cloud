@@ -167,7 +167,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
         self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-        await stop_frpc(self.hass, self.hass.config_entries)
+        await stop_frpc(self.hass, self._config_entry)
         return self.async_abort(reason="logged_out")
 
     async def async_step_signup(self, user_input=None):
