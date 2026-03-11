@@ -7,7 +7,7 @@ import logging
 
 import httpx
 
-from .const import EZLO_API_URI, SIGNUP_UUID
+from .const import EZLO_API_URI
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ async def signup(username, email, password, ha_instance_id):
         "username": username,
         "password": password,
         "email": email,
-        "uuid": SIGNUP_UUID,
+        # "uuid": ha_instance_id,
         "ha_instance_id": ha_instance_id,
     }
 
@@ -110,6 +110,18 @@ async def signup(username, email, password, ha_instance_id):
             "error": data.get("message", "Signup failed"),
         }
 
+    except httpx.HTTPStatusError as e:
+        try:
+            error_data = e.response.json()
+            error_msg = error_data.get("error", e.response.text)
+        except (ValueError, KeyError):
+            error_msg = e.response.text
+        _LOGGER.error(
+            "Signup request failed (HTTP %s): %s",
+            e.response.status_code,
+            error_msg,
+        )
+        return {"success": False, "data": None, "error": error_msg}
     except httpx.RequestError as e:
         _LOGGER.error("Signup failed: %s", e)
         return {"success": False, "data": None, "error": "Network error"}
@@ -150,6 +162,18 @@ async def create_stripe_session(user_id, price_id, back_ref_url):
             "error": data.get("error", "Unknown error"),
         }
 
+    except httpx.HTTPStatusError as e:
+        try:
+            error_data = e.response.json()
+            error_msg = error_data.get("message", e.response.text)
+        except (ValueError, KeyError):
+            error_msg = e.response.text
+        _LOGGER.error(
+            "Stripe session request failed (HTTP %s): %s",
+            e.response.status_code,
+            error_msg,
+        )
+        return {"success": False, "data": None, "error": error_msg}
     except httpx.RequestError as e:
         _LOGGER.error("Stripe checkout api error: %s", e)
         return {"success": False, "data": None, "error": "Stripe checkout api error"}
