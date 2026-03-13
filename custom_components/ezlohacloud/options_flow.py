@@ -17,6 +17,7 @@ from .api import (
     get_subscription_status,
     signup,
 )
+from .const import STRIPE_PRICE_ID
 from .frp_helpers import fetch_and_update_frp_config, start_frpc, stop_frpc
 
 _LOGGER = logging.getLogger(__name__)
@@ -228,7 +229,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
 
                     stripe_response = await create_stripe_session(
                         user_uuid,
-                        "price_1RLKzGIOARqo54014CFxqSo3",
+                        STRIPE_PRICE_ID,
                         back_url,
                     )
 
