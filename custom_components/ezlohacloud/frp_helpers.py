@@ -70,8 +70,7 @@ async def fetch_and_update_frp_config(
             doc = document()
 
             # Add server configuration
-            # doc.add("serverAddr", server_config["serverAddr"])
-            doc.add("serverAddr", "152.42.152.93")
+            doc.add("serverAddr", server_config["serverAddr"])
             doc.add("serverPort", server_config["serverPort"])
 
             # Create array-of-tables for proxies
@@ -120,7 +119,8 @@ async def start_frpc(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
             subprocess.Popen, [binary_path, "-c", config_path]
         )
     except Exception as err:
-        _LOGGER.error("Configuration failed: %s", err)
+        _LOGGER.error("Failed to start FRPC: %s", err)
+        return
 
     # Store process reference using entry.entry_id
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {

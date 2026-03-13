@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 
-import requests
+import httpx
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -23,10 +23,13 @@ _LOGGER = logging.getLogger(__name__)
 # Architecture mapping
 ARCH_MAP = {
     "aarch64": "arm64",
+    "arm64": "arm64",
     "x86_64": "amd64",
     "amd64": "amd64",
     "armv7l": "arm",
+    "armv6l": "arm",
     "armhf": "arm",
+    "arm": "arm",
     "i386": "386",
     "i686": "386",
 }
@@ -63,8 +66,9 @@ async def install_frpc(hass: HomeAssistant, version: str, machine: str) -> str:
     """Install FRPC binary for specific version and architecture."""
     integration_dir = Path(__file__).parent
     bin_dir = integration_dir / "bin"
-    bin_dir.mkdir(exist_ok=True)
     binary_path = bin_dir / "frpc"
+
+    await hass.async_add_executor_job(bin_dir.mkdir, True, True)
 
     # Check if we need to update the binary
     if await check_binary_current(binary_path, version):
@@ -86,12 +90,12 @@ def _sync_install_frpc(version: str, machine: str, binary_path: Path) -> str:
 
         # Download frp release
         try:
-            with requests.get(url, stream=True, timeout=30) as response:
+            with httpx.stream("GET", url, timeout=30, follow_redirects=True) as response:
                 response.raise_for_status()
                 with open(tar_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
+                    for chunk in response.iter_bytes(chunk_size=8192):
                         f.write(chunk)
-        except requests.RequestException as err:
+        except httpx.HTTPError as err:
             raise FrpcInstallError(f"Download failed: {err}") from err
 
         # Extract and install binary
@@ -114,7 +118,7 @@ def _sync_install_frpc(version: str, machine: str, binary_path: Path) -> str:
 
 async def check_binary_current(binary_path: Path, version: str) -> bool:
     """Check if existing binary matches required version."""
-    if not binary_path.exists():
+    if not binary_path.is_file():
         return False
 
     try:
@@ -145,7 +149,13 @@ async def check_binary_current(binary_path: Path, version: str) -> bool:
 async def get_system_architecture(hass: HomeAssistant) -> str:
     """Determine system architecture with Home Assistant compatibility."""
     arch = platform.machine().lower()
-    return ARCH_MAP.get(arch, "amd64")
+    mapped = ARCH_MAP.get(arch)
+    if not mapped:
+        raise FrpcInstallError(
+            f"Unsupported architecture: {arch}. "
+            f"Supported: {', '.join(sorted(ARCH_MAP))}"
+        )
+    return mapped
 
 
 async def setup_frpc_configuration(
