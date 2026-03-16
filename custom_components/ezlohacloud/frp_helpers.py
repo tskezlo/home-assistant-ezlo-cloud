@@ -16,30 +16,14 @@ from .const import DOMAIN, EZLO_API_URI
 _LOGGER = logging.getLogger(__name__)
 
 
-def get_frp_config_path() -> str:
-    """Return the frp client config path and ensure the directory and file exist."""
-    config_dir = Path(__file__).parent / "config"
-    config_path = config_dir / "frpc.toml"
-
-    # Ensure the config directory exists
-    if not config_dir.exists():
-        _LOGGER.info("Config folder missing! creating it now")
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-    # Ensure the config file exists
-    if not config_path.exists():
-        _LOGGER.info("Frpc.toml file missing! creating it now")
-        config_path.touch()
-
-    return config_path
+def get_frp_config_path() -> Path:
+    """Return the frp client config path."""
+    return Path(__file__).parent / "config" / "frpc.toml"
 
 
-def get_frp_binary_path() -> str:
+def get_frp_binary_path() -> Path:
     """Return the frp client binary path."""
-    integration_dir = Path(__file__).parent
-    bin_dir = integration_dir / "bin"
-    bin_dir.mkdir(exist_ok=True)
-    return bin_dir / "frpc"
+    return Path(__file__).parent / "bin" / "frpc"
 
 
 async def fetch_and_update_frp_config(
@@ -67,6 +51,7 @@ async def fetch_and_update_frp_config(
 
         # Create TOML document with tomlkit
         def _create_toml():
+            config_path.parent.mkdir(parents=True, exist_ok=True)
             doc = document()
 
             # Add server configuration
@@ -116,24 +101,30 @@ async def start_frpc(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
 
     try:
         process = await hass.async_add_executor_job(
-            subprocess.Popen, [binary_path, "-c", config_path]
+            subprocess.Popen, [str(binary_path), "-c", str(config_path)]
         )
     except Exception as err:
         _LOGGER.error("Failed to start FRPC: %s", err)
         return
 
     # Store process reference using entry.entry_id
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data[config_entry.entry_id] = {
         "process": process,
         "config_path": config_path,
         "binary_path": binary_path,
     }
 
-    # Register cleanup with proper closure variables
-    async def async_shutdown(event):
-        await async_unload_entry(hass, config_entry)
+    # Register shutdown listener only once per entry
+    listener_key = f"{config_entry.entry_id}_shutdown_unsub"
+    if listener_key not in domain_data:
 
-    hass.bus.async_listen_once("homeassistant_stop", async_shutdown)
+        async def async_shutdown(_event):
+            await async_unload_entry(hass, config_entry)
+
+        domain_data[listener_key] = hass.bus.async_listen_once(
+            "homeassistant_stop", async_shutdown
+        )
 
 
 async def stop_frpc(hass: HomeAssistant, config_entry: ConfigEntry) -> None:

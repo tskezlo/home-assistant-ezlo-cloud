@@ -7,6 +7,9 @@ import logging
 
 import httpx
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.httpx_client import create_async_httpx_client
+
 from .const import EZLO_API_URI
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,7 +23,7 @@ def _raise_missing_uuid():
     raise ValueError("UUID missing in token payload")
 
 
-async def authenticate(username, password, uuid):
+async def authenticate(hass: HomeAssistant, username, password, uuid):
     """Authenticate against Ezlo API (async)."""
     payload = {
         "username": username,
@@ -29,9 +32,11 @@ async def authenticate(username, password, uuid):
         "ha_instance_id": uuid,
     }
 
-    client = httpx.AsyncClient(timeout=10)
+    client = create_async_httpx_client(hass)
     try:
-        response = await client.post(f"{AUTH_API_URL}/login", json=payload)
+        response = await client.post(
+            f"{AUTH_API_URL}/login", json=payload, timeout=10
+        )
         response.raise_for_status()
         data = response.json()
         _LOGGER.info("Login response: %s", data)
@@ -78,11 +83,9 @@ async def authenticate(username, password, uuid):
     except (httpx.RequestError, ValueError, binascii.Error) as e:
         _LOGGER.error("Auth request failed: %s", e)
         return {"success": False, "data": None, "error": "API connection failed"}
-    finally:
-        await client.aclose()
 
 
-async def signup(username, email, password, ha_instance_id):
+async def signup(hass: HomeAssistant, username, email, password, ha_instance_id):
     """Send signup request to Go Auth API and return the response."""
     _LOGGER.info("Sending signup request to Auth API")
     payload = {
@@ -93,9 +96,11 @@ async def signup(username, email, password, ha_instance_id):
         "ha_instance_id": ha_instance_id,
     }
 
-    client = httpx.AsyncClient(timeout=5)
+    client = create_async_httpx_client(hass)
     try:
-        response = await client.post(f"{AUTH_API_URL}/signup", json=payload)
+        response = await client.post(
+            f"{AUTH_API_URL}/signup", json=payload, timeout=5
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -125,11 +130,9 @@ async def signup(username, email, password, ha_instance_id):
     except httpx.RequestError as e:
         _LOGGER.error("Signup failed: %s", e)
         return {"success": False, "data": None, "error": "Network error"}
-    finally:
-        await client.aclose()
 
 
-async def create_stripe_session(user_id, price_id, back_ref_url):
+async def create_stripe_session(hass: HomeAssistant, user_id, price_id, back_ref_url):
     """Create a Stripe Checkout session."""
     _LOGGER.info("Creating Stripe checkout session for user: %s", user_id)
     payload = {
@@ -138,9 +141,11 @@ async def create_stripe_session(user_id, price_id, back_ref_url):
         "back_ref_url": back_ref_url,
     }
 
-    client = httpx.AsyncClient(timeout=10)
+    client = create_async_httpx_client(hass)
     try:
-        response = await client.post(f"{STRIPE_API_URL}/create-session", json=payload)
+        response = await client.post(
+            f"{STRIPE_API_URL}/create-session", json=payload, timeout=10
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -177,31 +182,30 @@ async def create_stripe_session(user_id, price_id, back_ref_url):
     except httpx.RequestError as e:
         _LOGGER.error("Stripe checkout api error: %s", e)
         return {"success": False, "data": None, "error": "Stripe checkout api error"}
-    finally:
-        await client.aclose()
 
 
-async def get_subscription_status(user_uuid):
+async def get_subscription_status(hass: HomeAssistant, user_uuid):
     """Fetch subscription status from Ezlo backend."""
+    client = create_async_httpx_client(hass)
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            response = await client.get(
-                f"{API_URL}/subscription/status",
-                params={"user_uuid": user_uuid},
-            )
-            response.raise_for_status()
-            data = response.json().get("data")
+        response = await client.get(
+            f"{API_URL}/subscription/status",
+            params={"user_uuid": user_uuid},
+            timeout=5,
+        )
+        response.raise_for_status()
+        data = response.json().get("data")
 
-            if data:
-                return {
-                    "success": True,
-                    "status": data.get("status", "unknown"),
-                    "is_active": data.get("is_active", False),
-                    "start_timestamp": data.get("start_timestamp", ""),
-                    "end_timestamp": data.get("end_timestamp", ""),
-                }
+        if data:
+            return {
+                "success": True,
+                "status": data.get("status", "unknown"),
+                "is_active": data.get("is_active", False),
+                "start_timestamp": data.get("start_timestamp", ""),
+                "end_timestamp": data.get("end_timestamp", ""),
+            }
 
-            return {"success": False, "error": "No data returned"}
+        return {"success": False, "error": "No data returned"}
 
     except httpx.RequestError as e:
         _LOGGER.error("Failed to fetch subscription status: %s", e)

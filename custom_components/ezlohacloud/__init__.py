@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
-from .frp_helpers import fetch_and_update_frp_config, start_frpc
+from .frp_helpers import fetch_and_update_frp_config, start_frpc, stop_frpc
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         binary_path = await install_frpc(hass, version, machine)
 
         # Proceed with configuration setup
-        return await setup_frpc_configuration(hass, entry, config, binary_path)
+        return await setup_frpc_configuration(hass, entry, binary_path)
 
     except Exception as err:
         raise ConfigEntryNotReady(f"Failed to setup FRPC: {err}") from err
@@ -68,7 +68,7 @@ async def install_frpc(hass: HomeAssistant, version: str, machine: str) -> str:
     bin_dir = integration_dir / "bin"
     binary_path = bin_dir / "frpc"
 
-    await hass.async_add_executor_job(bin_dir.mkdir, True, True)
+    await hass.async_add_executor_job(lambda: bin_dir.mkdir(parents=True, exist_ok=True))
 
     # Check if we need to update the binary
     if await check_binary_current(binary_path, version):
@@ -160,22 +160,19 @@ async def get_system_architecture(hass: HomeAssistant) -> str:
 
 async def setup_frpc_configuration(
     hass: HomeAssistant,
-    entry: ConfigEntry,  # Add entry parameter here
-    config: dict,
+    entry: ConfigEntry,
     binary_path: str,
 ) -> bool:
     """Configure and start FRPC client."""
 
     auth_data = get_config_data(hass)
-    token = auth_data["auth_token"]
-    uuid = auth_data["user"]["uuid"]
-    is_logged_in = auth_data["is_logged_in"]
+    token = auth_data.get("auth_token")
+    user = auth_data.get("user", {})
+    uuid = user.get("uuid")
+    is_logged_in = auth_data.get("is_logged_in", False)
 
     if not is_logged_in and not token:
         return False
-
-    config_path = Path(__file__).parent / "config" / "frpc.toml"
-    _LOGGER.debug("FRPC configuration generated at %s", config_path)
 
     try:
         await fetch_and_update_frp_config(hass=hass, uuid=uuid, token=token)
@@ -203,22 +200,5 @@ def get_config_data(hass: HomeAssistant) -> dict:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload frpc client."""
-    if entry.entry_id not in hass.data.get(DOMAIN, {}):
-        return True
-
-    data = hass.data[DOMAIN].pop(entry.entry_id)
-    process = data["process"]
-
-    try:
-        process.terminate()
-        await hass.async_add_executor_job(process.wait, 5)
-    except subprocess.TimeoutExpired:
-        _LOGGER.warning("FRPC client did not terminate gracefully, forcing exit")
-        process.kill()
-    except (OSError, RuntimeError) as err:
-        _LOGGER.error("Error stopping FRPC client: %s", err)
-    except Exception:
-        _LOGGER.exception("Unexpected error during FRPC shutdown")
-        raise  # re-raise to preserve traceback
-
+    await stop_frpc(hass, entry)
     return True

@@ -126,7 +126,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             if not system_uuid:
                 system_uuid = ""
                 _LOGGER.warning("Home Assistant system_uuid missing!")
-            auth_response = await authenticate(username, password, system_uuid)
+            auth_response = await authenticate(self.hass, username, password, system_uuid)
             _LOGGER.info("Response: %s", auth_response)
 
             if auth_response["success"]:
@@ -185,7 +185,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 system_uuid = ""
                 _LOGGER.warning("Home Assistant system_uuid missing!")
 
-            signup_response = await signup(username, email, password, system_uuid)
+            signup_response = await signup(self.hass, username, email, password, system_uuid)
 
             if signup_response.get("success") and "data" in signup_response:
                 try:
@@ -228,6 +228,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     back_url = f"{base_url}/config/integrations/integration/ezlohacloud"
 
                     stripe_response = await create_stripe_session(
+                        self.hass,
                         user_uuid,
                         STRIPE_PRICE_ID,
                         back_url,
@@ -316,7 +317,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         attempts = timeout // interval
         for _ in range(attempts):
             await asyncio.sleep(interval)
-            status_response = await get_subscription_status(user_uuid)
+            status_response = await get_subscription_status(self.hass, user_uuid)
 
             if status_response.get("success") and status_response.get("is_active"):
                 _LOGGER.info("Subscription activated. Completing login")
@@ -342,7 +343,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         url = self._config_entry.data.get("payment_url", "https://example.com/cloud")
 
         if user_uuid:
-            status_response = await get_subscription_status(user_uuid)
+            status_response = await get_subscription_status(self.hass, user_uuid)
             if status_response.get("success"):
                 status = status_response.get("status", "unknown").capitalize()
                 active = (
