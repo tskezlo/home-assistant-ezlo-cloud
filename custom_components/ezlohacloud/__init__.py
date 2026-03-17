@@ -17,6 +17,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
 from .frp_helpers import fetch_and_update_frp_config, start_frpc, stop_frpc
+from .utils import ensure_trusted_proxy_config
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,6 +176,16 @@ async def setup_frpc_configuration(
         return False
 
     try:
+        # Ensure HA is configured to trust frpc's reverse proxy from localhost
+        config_changed = await hass.async_add_executor_job(
+            ensure_trusted_proxy_config, hass
+        )
+        if config_changed:
+            _LOGGER.warning(
+                "Updated configuration.yaml with trusted proxy settings. "
+                "Please restart Home Assistant for remote access to work"
+            )
+
         await fetch_and_update_frp_config(hass=hass, uuid=uuid, token=token)
         await start_frpc(hass=hass, config_entry=entry)
     except (OSError, ValueError, RuntimeError) as err:
