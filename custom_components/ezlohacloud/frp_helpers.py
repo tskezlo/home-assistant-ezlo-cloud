@@ -28,8 +28,11 @@ def get_frp_binary_path() -> Path:
 
 async def fetch_and_update_frp_config(
     hass: HomeAssistant, uuid: str, token: str
-) -> bool:
-    """Fetch and update the frp client config."""
+) -> dict:
+    """Fetch and update the frp client config.
+
+    Returns a dict with server_addr and subdomain for the first proxy.
+    """
 
     config_path = get_frp_config_path()
 
@@ -74,8 +77,24 @@ async def fetch_and_update_frp_config(
             doc.add("proxies", proxies)
 
             # Write to file
+            # tomlkit quotes dotted keys ("metadatas.token"), but frp
+            # requires the bare form: metadatas.token = "...".
+            # So we inject it as a raw line after the server fields.
+            toml_text = dumps(doc)
+            lines = toml_text.split("\n")
+            # Insert metadatas.token after serverPort line
+            meta_line = f'metadatas.token = "{token}"'
+            insert_idx = next(
+                (
+                    i + 1
+                    for i, line in enumerate(lines)
+                    if line.startswith("serverPort")
+                ),
+                2,
+            )
+            lines.insert(insert_idx, meta_line)
             with open(config_path, "w", encoding="utf-8") as f:
-                f.write(dumps(doc))
+                f.write("\n".join(lines))
 
         await hass.async_add_executor_job(_create_toml)
 
@@ -88,8 +107,13 @@ async def fetch_and_update_frp_config(
     except Exception as err:
         _LOGGER.error("Configuration generation failed: %s", err)
         raise
-    else:
-        return True
+
+    # Return connection details for the config entry
+    first_proxy = server_config["proxies"][0] if server_config["proxies"] else {}
+    return {
+        "server_addr": server_config.get("serverAddr", ""),
+        "subdomain": first_proxy.get("subdomain", ""),
+    }
 
 
 async def start_frpc(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
