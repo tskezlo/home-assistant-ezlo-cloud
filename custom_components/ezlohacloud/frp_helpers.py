@@ -68,10 +68,10 @@ async def fetch_and_update_frp_config(
                 proxy_table.add("name", proxy["name"])
                 proxy_table.add("type", proxy["type"])
                 proxy_table.add("localPort", proxy["localPort"])
-                proxy_table.add(
-                    "subdomain",
-                    proxy["subdomain"],
-                )
+                # API returns "hash:server.domain" — only the hash is needed
+                subdomain_raw = proxy["subdomain"]
+                subdomain = subdomain_raw.split(":")[0] if ":" in subdomain_raw else subdomain_raw
+                proxy_table.add("subdomain", subdomain)
                 proxies.append(proxy_table)
 
             doc.add("proxies", proxies)
