@@ -9,6 +9,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.instance_id import async_get as async_get_instance_id
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .api import (
     authenticate,
@@ -43,12 +44,10 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
     def _get_cloud_url(self) -> str:
         """Build the cloud URL from frpc config data."""
         subdomain = self._config_entry.data.get("subdomain", "")
-        server_addr = self._config_entry.data.get("server_addr", "")
+        server_name = self._config_entry.data.get("server_name", "")
 
-        if subdomain and server_addr:
-            return f"http://{subdomain}.{server_addr}"
-        if subdomain:
-            return f"http://{subdomain}.ezlo.com"
+        if subdomain and server_name:
+            return f"https://{subdomain}.{server_name}"
         return ""
 
     async def async_step_init(self, user_input=None):
@@ -224,11 +223,20 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                         self._config_entry, data=new_data
                     )
 
-                    base_url = (
-                        self.hass.config.external_url
-                        or self.hass.config.internal_url
-                        or "http://localhost:8123"
-                    )
+                    try:
+                        # Prefer external URL so Stripe can redirect back
+                        base_url = get_url(
+                            self.hass,
+                            allow_internal=False,
+                            allow_external=True,
+                        )
+                    except NoURLAvailableError:
+                        try:
+                            base_url = get_url(
+                                self.hass, require_current_request=True
+                            )
+                        except NoURLAvailableError:
+                            base_url = get_url(self.hass)
                     back_url = (
                         f"{base_url}/config/integrations/integration/ezlohacloud"
                     )
@@ -309,7 +317,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             )
             # Save connection details for the cloud status UI
             updated_data = self._config_entry.data.copy()
-            updated_data["server_addr"] = frp_info.get("server_addr", "")
+            updated_data["server_name"] = frp_info.get("server_name", "")
             updated_data["subdomain"] = frp_info.get("subdomain", "")
             self.hass.config_entries.async_update_entry(
                 self._config_entry, data=updated_data

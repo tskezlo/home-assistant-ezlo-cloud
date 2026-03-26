@@ -110,9 +110,11 @@ async def fetch_and_update_frp_config(
 
     # Return connection details for the config entry
     first_proxy = server_config["proxies"][0] if server_config["proxies"] else {}
+    subdomain_raw = first_proxy.get("subdomain", "")
+    subdomain = subdomain_raw.split(":")[0] if ":" in subdomain_raw else subdomain_raw
     return {
-        "server_addr": server_config.get("serverAddr", ""),
-        "subdomain": first_proxy.get("subdomain", ""),
+        "server_name": server_config.get("serverName", ""),
+        "subdomain": subdomain,
     }
 
 
