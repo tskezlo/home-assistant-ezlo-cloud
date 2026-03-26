@@ -19,14 +19,14 @@ class EzloHACloudConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     MINOR_VERSION = 1
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:
-        """Handle the initial step — just confirm and create the entry."""
+        """Handle the initial step — show confirmation."""
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
-
-        if user_input is not None:
-            return self.async_create_entry(title="Ezlo HA Cloud", data={})
-
         return self.async_show_form(step_id="confirm")
+
+    async def async_step_confirm(self, user_input=None) -> ConfigFlowResult:
+        """Handle confirm step — create the entry."""
+        return self.async_create_entry(title="Ezlo HA Cloud", data={})
 
     @staticmethod
     @callback
