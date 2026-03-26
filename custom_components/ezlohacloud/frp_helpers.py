@@ -11,6 +11,7 @@ from tomlkit import aot, document, dumps, table
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .api import SubscriptionExpiredError
 from .const import DOMAIN, EZLO_API_URI
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,6 +101,14 @@ async def fetch_and_update_frp_config(
 
     except KeyError as err:
         _LOGGER.error("Missing expected key in API response: %s", err)
+        raise
+    except aiohttp.ClientResponseError as err:
+        if err.status == 402:
+            _LOGGER.warning("Subscription expired — cannot fetch FRP config")
+            raise SubscriptionExpiredError(
+                "Your subscription has expired. Please subscribe to continue."
+            ) from err
+        _LOGGER.error("API request failed (HTTP %s): %s", err.status, err.message)
         raise
     except aiohttp.ClientError as err:
         _LOGGER.error("API request failed: %s", err)
