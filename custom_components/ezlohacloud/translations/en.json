@@ -27,6 +27,7 @@
                     "signup": "Create a New Account",
                     "cloud_status": "Cloud Connection Status",
                     "view_status": "Subscription Status",
+                    "subscribe": "Subscribe Now",
                     "logout": "Logout"
                 }
             },
@@ -40,7 +41,7 @@
             },
             "signup": {
                 "title": "Create an Ezlo Cloud Account",
-                "description": "Sign up for a new account. After registration, you will be redirected to complete payment.",
+                "description": "Create a new account and get a **free 30-day trial** of Ezlo Cloud remote access. No payment required during the trial period.",
                 "data": {
                     "username": "Username",
                     "email": "Email",
@@ -49,28 +50,36 @@
             },
             "cloud_status": {
                 "title": "Cloud Connection",
-                "description": "**Status:** {connection_status}\n\n**Account:** {username}\n\n**Remote URL:** [{cloud_url}]({cloud_url})\n\nUse the URL above to access your Home Assistant remotely.",
+                "description": "**Status:** {connection_status}\n\n**Account:** {username}\n\n**Remote URL:** [{cloud_url}]({cloud_url})\n\n{trial_info}",
                 "menu_options": {
                     "init": "Back"
                 }
             },
             "view_status": {
                 "title": "Subscription Status",
-                "description": "**Status:** {status}\n\n[Manage your subscription]({url})",
+                "description": "**Status:** {status}\n\n{trial_info}",
                 "menu_options": {
+                    "subscribe": "Subscribe Now",
                     "init": "Back"
                 }
             },
+            "subscribe": {
+                "title": "Subscribe to Ezlo Cloud",
+                "description": "Complete your subscription to continue using Ezlo Cloud remote access.\n\nClick the link below to proceed with payment:\n\n[Proceed to payment]({url})\n\nThis page will update automatically once payment is confirmed."
+            },
             "redirecting": {
                 "title": "Complete Payment",
-                "description": "Your account has been created successfully!\n\nClick the link below to complete your subscription payment:\n\n[Proceed to payment]({url})\n\nThis page will update automatically once payment is confirmed."
+                "description": "Click the link below to complete your subscription payment:\n\n[Proceed to payment]({url})\n\nThis page will update automatically once payment is confirmed."
             }
         },
         "abort": {
             "login_successful": "You are now logged in to Ezlo Cloud. Remote access is being configured.",
             "logged_out": "You have been logged out of Ezlo Cloud. Remote access has been disabled.",
             "config_saved": "Configuration saved successfully.",
+            "signup_trial_started": "Welcome! Your account has been created and your **30-day free trial** has started. Remote access is being configured.\n\nYou can subscribe anytime from the integration options before your trial ends.",
+            "subscription_activated": "Your subscription is now active! Remote access has been configured.",
             "stripe_redirect_finished": "Payment flow completed. Your subscription status will be updated shortly.",
+            "stripe_failed": "Could not create payment session. Please try again later.",
             "session_expired": "Your session has expired. Please log in again."
         },
         "error": {

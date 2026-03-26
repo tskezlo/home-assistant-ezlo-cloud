@@ -19,6 +19,10 @@ STRIPE_API_URL = f"{EZLO_API_URI}/api/stripe"
 API_URL = f"{EZLO_API_URI}/api"
 
 
+class SubscriptionExpiredError(Exception):
+    """Raised when the API returns 402 (subscription expired)."""
+
+
 def _raise_missing_uuid():
     raise ValueError("UUID missing in token payload")
 
@@ -64,6 +68,9 @@ async def authenticate(hass: HomeAssistant, username, password, uuid):
                         "ezlo_id": ezlo_id,
                         "oem_id": 1,
                     },
+                    "subscription_status": data.get("subscription_status"),
+                    "payment_required": data.get("payment_required", False),
+                    "trial_ends_at": data.get("trial_ends_at"),
                 },
                 "error": None,
             }
@@ -107,7 +114,17 @@ async def signup(hass: HomeAssistant, username, email, password, ha_instance_id)
         token = data.get("token")
         if token:
             _LOGGER.info("Signup successful")
-            return {"success": True, "data": {"token": token}, "error": None}
+            return {
+                "success": True,
+                "data": {
+                    "token": token,
+                    "trial_ends_at": data.get("trial_ends_at"),
+                    "subscription_status": data.get(
+                        "subscription_status", "trial"
+                    ),
+                },
+                "error": None,
+            }
         _LOGGER.warning("Signup failed. Response: %s", data)
         return {
             "success": False,

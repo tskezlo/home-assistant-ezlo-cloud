@@ -15,7 +15,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import DOMAIN
+from .api import SubscriptionExpiredError
+from .const import DOMAIN, SUBSCRIPTION_TRIAL_EXPIRED
 from .frp_helpers import fetch_and_update_frp_config, start_frpc, stop_frpc
 from .utils import ensure_trusted_proxy_config
 
@@ -188,6 +189,16 @@ async def setup_frpc_configuration(
 
         await fetch_and_update_frp_config(hass=hass, uuid=uuid, token=token)
         await start_frpc(hass=hass, config_entry=entry)
+    except SubscriptionExpiredError:
+        _LOGGER.warning(
+            "Subscription expired — skipping FRPC setup. "
+            "Please subscribe via the integration options"
+        )
+        new_data = entry.data.copy()
+        new_data["subscription_status"] = SUBSCRIPTION_TRIAL_EXPIRED
+        new_data["payment_required"] = True
+        hass.config_entries.async_update_entry(entry, data=new_data)
+        return True  # Don't fail the entry, let user fix via options
     except (OSError, ValueError, RuntimeError) as err:
         _LOGGER.error("Configuration failed: %s", err)
         return False
