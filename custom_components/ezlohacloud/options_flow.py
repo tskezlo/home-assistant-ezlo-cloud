@@ -408,7 +408,14 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         trial_ends_at: str | None = None,
     ) -> None:
         """Shared logic to handle successful login or signup."""
-        expiry_time = datetime.now() + timedelta(seconds=3600)
+        # Use the JWT's actual exp claim instead of hardcoding 1 hour
+        try:
+            jwt_payload = decode_jwt_payload(token)
+            exp_timestamp = jwt_payload.get("exp", 0)
+            expiry_time = datetime.fromtimestamp(exp_timestamp)
+        except (ValueError, KeyError, OSError):
+            # Fallback to 24 hours if JWT decode fails
+            expiry_time = datetime.now() + timedelta(hours=24)
 
         new_data = self._config_entry.data.copy()
         new_data.update(
