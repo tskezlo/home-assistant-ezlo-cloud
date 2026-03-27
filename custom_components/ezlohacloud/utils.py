@@ -36,6 +36,9 @@ def _needs_trusted_proxy(config_text: str) -> str | None:
     if has_forwarded and has_trusted:
         return None
 
+    # Check if trusted_proxies key exists but just missing 127.0.0.1
+    has_trusted_key = "trusted_proxies" in config_text
+
     lines = config_text.splitlines(keepends=True)
     new_lines = []
     i = 0
@@ -51,15 +54,32 @@ def _needs_trusted_proxy(config_text: str) -> str | None:
             new_lines.append(line)
             i += 1
 
-            # Collect existing http block lines (indented lines)
+            # Walk through existing http block lines (indented or blank)
+            inserted_proxy = False
             while i < len(lines) and (lines[i].strip() == "" or lines[i][0].isspace()):
-                new_lines.append(lines[i])
+                current = lines[i]
+                new_lines.append(current)
+
+                # If trusted_proxies exists, add 127.0.0.1 after the last
+                # "    - x.x.x.x" entry under it
+                if not inserted_proxy and has_trusted_key and "trusted_proxies" in current.strip():
+                    i += 1
+                    # Collect existing proxy entries
+                    while i < len(lines) and lines[i].strip().startswith("- "):
+                        new_lines.append(lines[i])
+                        i += 1
+                    # Append 127.0.0.1 after existing entries
+                    new_lines.append("    - 127.0.0.1\n")
+                    inserted_proxy = True
+                    continue
+
                 i += 1
 
             # Add missing entries at the end of the http block
             if not has_forwarded:
                 new_lines.append("  use_x_forwarded_for: true\n")
-            if not has_trusted:
+            if not has_trusted_key:
+                # No trusted_proxies key at all — add the whole section
                 new_lines.append("  trusted_proxies:\n")
                 new_lines.append("    - 127.0.0.1\n")
 
