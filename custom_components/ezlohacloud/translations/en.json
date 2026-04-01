@@ -73,11 +73,11 @@
             }
         },
         "abort": {
-            "login_successful": "You are now logged in to Ezlo Cloud. Remote access is being configured.",
+            "login_successful": "You are now logged in to Ezlo Cloud. Remote access is being configured.\n\n**Remote URL:** [{cloud_url}]({cloud_url})\n\n{trial_info}",
             "logged_out": "You have been logged out of Ezlo Cloud. Remote access has been disabled.",
             "config_saved": "Configuration saved successfully.",
-            "signup_trial_started": "Welcome! Your account has been created and your **30-day free trial** has started. Remote access is being configured.\n\nYou can subscribe anytime from the integration options before your trial ends.",
-            "subscription_activated": "Your subscription is now active! Remote access has been configured.",
+            "signup_trial_started": "Welcome! Your account has been created and your **30-day free trial** has started. Remote access is being configured.\n\n**Remote URL:** [{cloud_url}]({cloud_url})\n\n{trial_info}\n\nYou can subscribe anytime from the integration options before your trial ends.",
+            "subscription_activated": "Your subscription is now active! Remote access has been configured.\n\n**Remote URL:** [{cloud_url}]({cloud_url})\n\n{trial_info}",
             "stripe_redirect_finished": "Payment flow completed. Your subscription status will be updated shortly.",
             "stripe_failed": "Could not create payment session. Please try again later.",
             "session_expired": "Your session has expired. Please log in again."

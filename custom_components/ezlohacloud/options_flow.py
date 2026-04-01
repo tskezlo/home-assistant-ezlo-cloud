@@ -1,7 +1,7 @@
 """Ezlo HA Cloud integration options flow for Home Assistant."""
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 
 import voluptuous as vol
@@ -59,6 +59,33 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         """Register options flow steps."""
         return EzloOptionsFlowHandler(config_entry)
 
+    def _get_abort_placeholders(self) -> dict[str, str]:
+        """Build description placeholders for abort messages."""
+        cloud_url = self._get_cloud_url()
+        sub_status = self._config_entry.data.get("subscription_status", "")
+        trial_ends_at = self._config_entry.data.get("trial_ends_at")
+
+        if cloud_url:
+            url_text = cloud_url
+        else:
+            url_text = "Not yet available"
+
+        if sub_status == SUBSCRIPTION_TRIAL:
+            days = _compute_trial_days(trial_ends_at)
+            if days is not None:
+                trial_text = f"You are on a free trial with {days} day{'s' if days != 1 else ''} remaining."
+            else:
+                trial_text = "You are on a free 30-day trial."
+        elif sub_status == SUBSCRIPTION_ACTIVE:
+            trial_text = "Your subscription is active."
+        else:
+            trial_text = ""
+
+        return {
+            "cloud_url": url_text,
+            "trial_info": trial_text,
+        }
+
     def _get_cloud_url(self) -> str:
         """Build the cloud URL from frpc config data."""
         subdomain = self._config_entry.data.get("subdomain", "")
@@ -91,11 +118,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         """Check login status and show the correct UI."""
         config_data = self._config_entry.data
         is_logged_in = config_data.get("is_logged_in", False)
-        token_expiry = config_data.get("token_expiry", 0)
         sub_status = config_data.get("subscription_status")
-
-        if is_logged_in and datetime.now().timestamp() > token_expiry:
-            return await self.async_step_force_logout()
 
         if is_logged_in:
             # Trial expired — show subscribe option prominently
@@ -253,7 +276,10 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     subscription_status=sub_status,
                     trial_ends_at=trial_ends_at,
                 )
-                return self.async_abort(reason="login_successful")
+                return self.async_abort(
+                    reason="login_successful",
+                    description_placeholders=self._get_abort_placeholders(),
+                )
             errors["base"] = "invalid_credentials"
 
         return self.async_show_form(
@@ -332,7 +358,10 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                         subscription_status=sub_status,
                         trial_ends_at=trial_ends_at,
                     )
-                    return self.async_abort(reason="signup_trial_started")
+                    return self.async_abort(
+                        reason="signup_trial_started",
+                        description_placeholders=self._get_abort_placeholders(),
+                    )
 
                 except Exception:
                     _LOGGER.exception("Signup post-processing failed")
@@ -408,15 +437,6 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         trial_ends_at: str | None = None,
     ) -> None:
         """Shared logic to handle successful login or signup."""
-        # Use the JWT's actual exp claim instead of hardcoding 1 hour
-        try:
-            jwt_payload = decode_jwt_payload(token)
-            exp_timestamp = jwt_payload.get("exp", 0)
-            expiry_time = datetime.fromtimestamp(exp_timestamp)
-        except (ValueError, KeyError, OSError):
-            # Fallback to 24 hours if JWT decode fails
-            expiry_time = datetime.now() + timedelta(hours=24)
-
         new_data = self._config_entry.data.copy()
         new_data.update(
             {
@@ -428,7 +448,6 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     "ezlo_id": user_info.get("ezlo_id", ""),
                 },
                 "is_logged_in": True,
-                "token_expiry": expiry_time.timestamp(),
                 "subscription_status": subscription_status,
                 "trial_ends_at": trial_ends_at,
                 "payment_required": False,
@@ -554,8 +573,15 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         """User returned from Stripe. Check payment status."""
         if self._config_entry.data.get("is_logged_in"):
             sub = self._config_entry.data.get("subscription_status")
+            placeholders = self._get_abort_placeholders()
             if sub == SUBSCRIPTION_ACTIVE:
-                return self.async_abort(reason="subscription_activated")
-            return self.async_abort(reason="login_successful")
+                return self.async_abort(
+                    reason="subscription_activated",
+                    description_placeholders=placeholders,
+                )
+            return self.async_abort(
+                reason="login_successful",
+                description_placeholders=placeholders,
+            )
 
         return self.async_abort(reason="stripe_redirect_finished")
