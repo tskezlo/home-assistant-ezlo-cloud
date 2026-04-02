@@ -61,6 +61,7 @@ async def authenticate(hass: HomeAssistant, username, password, uuid):
                 "success": True,
                 "data": {
                     "token": token,
+                    "tunnel_token": data.get("tunnel_token"),
                     "user": {
                         "uuid": user_uuid,
                         "username": username,
@@ -118,6 +119,7 @@ async def signup(hass: HomeAssistant, username, email, password, ha_instance_id)
                 "success": True,
                 "data": {
                     "token": token,
+                    "tunnel_token": data.get("tunnel_token"),
                     "trial_ends_at": data.get("trial_ends_at"),
                     "subscription_status": data.get(
                         "subscription_status", "trial"

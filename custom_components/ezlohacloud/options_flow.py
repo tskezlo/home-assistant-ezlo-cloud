@@ -51,6 +51,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         self._config_entry = config_entry
         # Temporary storage for pending login during payment flow
         self._pending_token: str | None = None
+        self._pending_tunnel_token: str | None = None
         self._pending_user: dict | None = None
 
     @staticmethod
@@ -236,6 +237,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             if auth_response["success"]:
                 data = auth_response["data"]
                 token = data["token"]
+                tunnel_token = data.get("tunnel_token")
                 user_info = data["user"]
                 payment_required = data.get("payment_required", False)
                 sub_status = data.get("subscription_status")
@@ -244,6 +246,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 if payment_required:
                     # Store pending login — user must pay first
                     self._pending_token = token
+                    self._pending_tunnel_token = tunnel_token
                     self._pending_user = {
                         "uuid": user_info["uuid"],
                         "username": user_info["username"],
@@ -255,6 +258,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     new_data.update(
                         {
                             "auth_token": token,
+                            "tunnel_token": tunnel_token,
                             "user": self._pending_user,
                             "subscription_status": sub_status,
                             "trial_ends_at": trial_ends_at,
@@ -273,6 +277,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                         "email": user_info["email"],
                         "ezlo_id": user_info["ezlo_id"],
                     },
+                    tunnel_token=tunnel_token,
                     subscription_status=sub_status,
                     trial_ends_at=trial_ends_at,
                 )
@@ -302,8 +307,8 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             {
                 "is_logged_in": False,
                 "auth_token": None,
+                "tunnel_token": None,
                 "user": {},
-                "token_expiry": 0,
                 "subscription_status": None,
                 "trial_ends_at": None,
                 "payment_required": False,
@@ -337,6 +342,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 try:
                     resp_data = signup_response["data"]
                     token = resp_data.get("token", "")
+                    tunnel_token = resp_data.get("tunnel_token")
                     payload = decode_jwt_payload(token)
                     user_uuid = payload.get("uuid")
 
@@ -355,6 +361,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                             "email": email,
                             "ezlo_id": payload.get("ezlo_user_id", ""),
                         },
+                        tunnel_token=tunnel_token,
                         subscription_status=sub_status,
                         trial_ends_at=trial_ends_at,
                     )
@@ -389,6 +396,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         user_data = config_data.get("user", {})
         user_uuid = user_data.get("uuid")
         token = self._pending_token or config_data.get("auth_token")
+        tunnel_token = self._pending_tunnel_token or config_data.get("tunnel_token")
 
         if not user_uuid:
             return self.async_abort(reason="session_expired")
@@ -415,6 +423,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     self._poll_payment_and_login(
                         user_uuid,
                         token,
+                        tunnel_token,
                         pending_user,
                     )
                 )
@@ -433,6 +442,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         self,
         token: str,
         user_info: dict,
+        tunnel_token: str | None = None,
         subscription_status: str | None = None,
         trial_ends_at: str | None = None,
     ) -> None:
@@ -441,6 +451,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         new_data.update(
             {
                 "auth_token": token,
+                "tunnel_token": tunnel_token,
                 "user": {
                     "uuid": user_info.get("uuid"),
                     "username": user_info.get("username"),
@@ -479,7 +490,11 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
     # ── Payment polling ──────────────────────────────────────────
 
     async def _poll_payment_and_login(
-        self, user_uuid: str, token: str, user_info: dict
+        self,
+        user_uuid: str,
+        token: str,
+        tunnel_token: str | None,
+        user_info: dict,
     ):
         """Background task to poll payment status and login."""
         timeout = 15 * 60  # 15 minutes
@@ -494,6 +509,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 await self._handle_successful_login(
                     token,
                     user_info,
+                    tunnel_token=tunnel_token,
                     subscription_status=SUBSCRIPTION_ACTIVE,
                 )
                 return

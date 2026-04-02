@@ -53,6 +53,11 @@ async def fetch_and_update_frp_config(
         # Extract server configuration from nested structure
         server_config = api_config["serverConfig"]
 
+        # Get tunnel token from server-config response (preferred)
+        tunnel_token = server_config.get("auth", {}).get("token", "")
+        if not tunnel_token:
+            _LOGGER.warning("No tunnel token in server-config response")
+
         # Create TOML document with tomlkit
         def _create_toml():
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -83,17 +88,18 @@ async def fetch_and_update_frp_config(
             # So we inject it as a raw line after the server fields.
             toml_text = dumps(doc)
             lines = toml_text.split("\n")
-            # Insert metadatas.token after serverPort line
-            meta_line = f'metadatas.token = "{token}"'
-            insert_idx = next(
-                (
-                    i + 1
-                    for i, line in enumerate(lines)
-                    if line.startswith("serverPort")
-                ),
-                2,
-            )
-            lines.insert(insert_idx, meta_line)
+            # Insert metadatas.token (tunnel token) after serverPort line
+            if tunnel_token:
+                meta_line = f'metadatas.token = "{tunnel_token}"'
+                insert_idx = next(
+                    (
+                        i + 1
+                        for i, line in enumerate(lines)
+                        if line.startswith("serverPort")
+                    ),
+                    2,
+                )
+                lines.insert(insert_idx, meta_line)
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
 
