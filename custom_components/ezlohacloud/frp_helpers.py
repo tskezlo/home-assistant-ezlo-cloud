@@ -55,6 +55,9 @@ async def fetch_and_update_frp_config(
 
         # Get tunnel token from server-config response (preferred)
         tunnel_token = server_config.get("auth", {}).get("token", "")
+        _LOGGER.debug(
+            "Server-config auth section: %s", server_config.get("auth")
+        )
         if not tunnel_token:
             _LOGGER.warning("No tunnel token in server-config response")
 

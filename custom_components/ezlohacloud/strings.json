@@ -33,7 +33,7 @@
       },
       "login": {
         "title": "Login to Ezlo Cloud",
-        "description": "Enter your Ezlo Cloud credentials to enable remote access.",
+        "description": "Enter your Ezlo Cloud credentials to enable remote access.\n\n{error_detail}",
         "data": {
           "username": "[%key:common::config_flow::data::username%]",
           "password": "[%key:common::config_flow::data::password%]"
@@ -41,7 +41,7 @@
       },
       "signup": {
         "title": "Create an Ezlo Cloud Account",
-        "description": "Create a new account and get a **free 30-day trial** of Ezlo Cloud remote access. No payment required during the trial period.",
+        "description": "Create a new account and get a **free 30-day trial** of Ezlo Cloud remote access. No payment required during the trial period.\n\n{error_detail}",
         "data": {
           "username": "[%key:common::config_flow::data::username%]",
           "email": "[%key:common::config_flow::data::email%]",

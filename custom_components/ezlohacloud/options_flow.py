@@ -222,6 +222,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_login(self, user_input=None):
         """Handle login authentication form."""
         errors = {}
+        login_error_detail = ""
         if user_input is not None:
             username = user_input["username"]
             password = user_input["password"]
@@ -286,6 +287,9 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     description_placeholders=self._get_abort_placeholders(),
                 )
             errors["base"] = "invalid_credentials"
+            login_error_detail = (
+                auth_response.get("error") or "Invalid username or password"
+            )
 
         return self.async_show_form(
             step_id="login",
@@ -296,6 +300,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
+            description_placeholders={"error_detail": login_error_detail},
         )
 
     # ── Logout ───────────────────────────────────────────────────
@@ -323,6 +328,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_signup(self, user_input=None):
         """Handle signup with 30-day free trial."""
         errors = {}
+        signup_error_detail = ""
 
         if user_input is not None:
             username = user_input["username"]
@@ -373,8 +379,10 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 except Exception:
                     _LOGGER.exception("Signup post-processing failed")
                     errors["base"] = "signup_failed"
+                    signup_error_detail = "Post-processing failed. Please try again."
             else:
                 errors["base"] = "signup_failed"
+                signup_error_detail = signup_response.get("error") or "Unknown error"
 
         return self.async_show_form(
             step_id="signup",
@@ -386,6 +394,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
+            description_placeholders={"error_detail": signup_error_detail},
         )
 
     # ── Subscribe (Stripe payment) ───────────────────────────────
