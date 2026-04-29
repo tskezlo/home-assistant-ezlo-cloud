@@ -70,8 +70,10 @@ async def authenticate(hass: HomeAssistant, username, password, uuid):
                         "oem_id": 1,
                     },
                     "subscription_status": data.get("subscription_status"),
+                    "is_trial": data.get("is_trial", False),
                     "payment_required": data.get("payment_required", False),
                     "trial_ends_at": data.get("trial_ends_at"),
+                    "checkout_url": data.get("checkout_url"),
                 },
                 "error": None,
             }
@@ -121,9 +123,10 @@ async def signup(hass: HomeAssistant, username, email, password, ha_instance_id)
                     "token": token,
                     "tunnel_token": data.get("tunnel_token"),
                     "trial_ends_at": data.get("trial_ends_at"),
-                    "subscription_status": data.get(
-                        "subscription_status", "trial"
-                    ),
+                    "subscription_status": data.get("subscription_status", ""),
+                    "is_trial": data.get("is_trial", False),
+                    "payment_required": data.get("payment_required", True),
+                    "checkout_url": data.get("checkout_url"),
                 },
                 "error": None,
             }

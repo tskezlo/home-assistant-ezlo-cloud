@@ -22,8 +22,11 @@ from .const import (
     DOMAIN,
     STRIPE_PRICE_ID,
     SUBSCRIPTION_ACTIVE,
-    SUBSCRIPTION_TRIAL,
-    SUBSCRIPTION_TRIAL_EXPIRED,
+    SUBSCRIPTION_CANCELED,
+    SUBSCRIPTION_INVALID_STATES,
+    SUBSCRIPTION_PAST_DUE,
+    SUBSCRIPTION_TRIALING,
+    SUBSCRIPTION_VALID_STATES,
 )
 from .frp_helpers import fetch_and_update_frp_config, start_frpc, stop_frpc
 
@@ -71,14 +74,18 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         else:
             url_text = "Not yet available"
 
-        if sub_status == SUBSCRIPTION_TRIAL:
+        if sub_status == SUBSCRIPTION_TRIALING:
             days = _compute_trial_days(trial_ends_at)
             if days is not None:
-                trial_text = f"You are on a free trial with {days} day{'s' if days != 1 else ''} remaining."
+                trial_text = f"You are on a free trial with {days} day{'s' if days != 1 else ''} remaining. Your card has been saved and will be charged when the trial ends."
             else:
-                trial_text = "You are on a free 30-day trial."
+                trial_text = "You are on a free trial. Your card has been saved and will be charged when the trial ends."
         elif sub_status == SUBSCRIPTION_ACTIVE:
             trial_text = "Your subscription is active."
+        elif sub_status == SUBSCRIPTION_PAST_DUE:
+            trial_text = "Your last payment failed. Please update your payment method to restore remote access."
+        elif sub_status == SUBSCRIPTION_CANCELED:
+            trial_text = "Your subscription was canceled. Resubscribe to restore remote access."
         else:
             trial_text = ""
 
@@ -122,12 +129,13 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         sub_status = config_data.get("subscription_status")
 
         if is_logged_in:
-            # Trial expired — show subscribe option prominently
-            if sub_status == SUBSCRIPTION_TRIAL_EXPIRED:
+            # Subscription invalid (past_due/canceled/incomplete) —
+            # show resubscribe option prominently
+            if sub_status in SUBSCRIPTION_INVALID_STATES:
                 return self.async_show_menu(
                     step_id="init",
                     menu_options={
-                        "subscribe": "Subscribe Now",
+                        "subscribe": "Resubscribe",
                         "cloud_status": "Cloud Connection Status",
                         "logout": "Logout",
                     },
@@ -175,14 +183,16 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             cloud_url = "Not available"
 
         # Build trial info string
-        if sub_status == SUBSCRIPTION_TRIAL:
+        if sub_status == SUBSCRIPTION_TRIALING:
             days = _compute_trial_days(trial_ends_at)
             if days is not None:
-                trial_info = f"Free trial: {days} day{'s' if days != 1 else ''} remaining. Subscribe anytime from Subscription Status to continue after trial."
+                trial_info = f"Free trial: {days} day{'s' if days != 1 else ''} remaining. Your card will be charged automatically when the trial ends."
             else:
-                trial_info = "You are on a free trial. Subscribe from Subscription Status to continue after trial."
-        elif sub_status == SUBSCRIPTION_TRIAL_EXPIRED:
-            trial_info = "Your free trial has expired. Please subscribe to restore remote access."
+                trial_info = "You are on a free trial. Your card will be charged automatically when the trial ends."
+        elif sub_status == SUBSCRIPTION_PAST_DUE:
+            trial_info = "Your last payment failed. Update your payment method to restore remote access."
+        elif sub_status == SUBSCRIPTION_CANCELED:
+            trial_info = "Your subscription was canceled. Resubscribe to restore remote access."
         elif sub_status == SUBSCRIPTION_ACTIVE:
             trial_info = "Subscription active."
         else:
@@ -243,6 +253,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 payment_required = data.get("payment_required", False)
                 sub_status = data.get("subscription_status")
                 trial_ends_at = data.get("trial_ends_at")
+                checkout_url = data.get("checkout_url")
 
                 if payment_required:
                     # Store pending login — user must pay first
@@ -263,12 +274,15 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                             "user": self._pending_user,
                             "subscription_status": sub_status,
                             "trial_ends_at": trial_ends_at,
+                            "payment_required": True,
                         }
                     )
                     self.hass.config_entries.async_update_entry(
                         self._config_entry, data=new_data
                     )
-                    return await self.async_step_subscribe()
+                    return await self.async_step_subscribe(
+                        checkout_url=checkout_url
+                    )
 
                 await self._handle_successful_login(
                     token,
@@ -349,6 +363,7 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                     resp_data = signup_response["data"]
                     token = resp_data.get("token", "")
                     tunnel_token = resp_data.get("tunnel_token")
+                    checkout_url = resp_data.get("checkout_url")
                     payload = decode_jwt_payload(token)
                     user_uuid = payload.get("uuid")
 
@@ -356,24 +371,34 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                         raise ValueError("UUID missing in token payload")
 
                     trial_ends_at = resp_data.get("trial_ends_at")
-                    sub_status = resp_data.get("subscription_status", SUBSCRIPTION_TRIAL)
+                    sub_status = resp_data.get("subscription_status", "")
 
-                    # Log in directly — no Stripe needed for trial
-                    await self._handle_successful_login(
-                        token,
+                    # Stripe Checkout required — store tokens but don't
+                    # mark logged in until trial starts via webhook
+                    self._pending_token = token
+                    self._pending_tunnel_token = tunnel_token
+                    self._pending_user = {
+                        "uuid": user_uuid,
+                        "username": username,
+                        "email": email,
+                        "ezlo_id": payload.get("ezlo_user_id", ""),
+                    }
+                    new_data = self._config_entry.data.copy()
+                    new_data.update(
                         {
-                            "uuid": user_uuid,
-                            "username": username,
-                            "email": email,
-                            "ezlo_id": payload.get("ezlo_user_id", ""),
-                        },
-                        tunnel_token=tunnel_token,
-                        subscription_status=sub_status,
-                        trial_ends_at=trial_ends_at,
+                            "auth_token": token,
+                            "tunnel_token": tunnel_token,
+                            "user": self._pending_user,
+                            "subscription_status": sub_status,
+                            "trial_ends_at": trial_ends_at,
+                            "payment_required": True,
+                        }
                     )
-                    return self.async_abort(
-                        reason="signup_trial_started",
-                        description_placeholders=self._get_abort_placeholders(),
+                    self.hass.config_entries.async_update_entry(
+                        self._config_entry, data=new_data
+                    )
+                    return await self.async_step_subscribe(
+                        checkout_url=checkout_url
                     )
 
                 except Exception:
@@ -399,8 +424,13 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
 
     # ── Subscribe (Stripe payment) ───────────────────────────────
 
-    async def async_step_subscribe(self, user_input=None):
-        """Handle Stripe payment for expired trial or new subscription."""
+    async def async_step_subscribe(self, user_input=None, checkout_url=None):
+        """Handle Stripe Checkout for new signup or resubscription.
+
+        If checkout_url is supplied (from signup/login response), use it
+        directly. Otherwise mint a fresh session via create-session API
+        (for resubscribe of past_due/canceled).
+        """
         config_data = self._config_entry.data
         user_data = config_data.get("user", {})
         user_uuid = user_data.get("uuid")
@@ -410,40 +440,46 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         if not user_uuid:
             return self.async_abort(reason="session_expired")
 
-        back_url = (
-            f"{self._get_base_url()}/config/integrations/integration/ezlohacloud"
-        )
-
-        stripe_response = await create_stripe_session(
-            self.hass, user_uuid, STRIPE_PRICE_ID, back_url
-        )
-
-        if stripe_response.get("success"):
-            checkout_url = stripe_response.get("data", {}).get("checkout_url")
-            if checkout_url:
-                # Start background polling for payment completion
-                pending_user = self._pending_user or {
-                    "uuid": user_uuid,
-                    "username": user_data.get("username", ""),
-                    "email": user_data.get("email", ""),
-                    "ezlo_id": user_data.get("ezlo_id", ""),
-                }
-                self.hass.async_create_task(
-                    self._poll_payment_and_login(
-                        user_uuid,
-                        token,
-                        tunnel_token,
-                        pending_user,
-                    )
+        # If no pre-supplied checkout_url, request a fresh one
+        if not checkout_url:
+            back_url = (
+                f"{self._get_base_url()}"
+                "/config/integrations/integration/ezlohacloud"
+            )
+            stripe_response = await create_stripe_session(
+                self.hass, user_uuid, STRIPE_PRICE_ID, back_url
+            )
+            if stripe_response.get("success"):
+                checkout_url = stripe_response.get("data", {}).get("checkout_url")
+            else:
+                _LOGGER.error(
+                    "Stripe session failed: %s", stripe_response.get("error")
                 )
-                return self.async_show_form(
-                    step_id="subscribe",
-                    description_placeholders={"url": checkout_url},
-                    data_schema=vol.Schema({}),
-                )
+                return self.async_abort(reason="stripe_failed")
 
-        _LOGGER.error("Stripe session failed: %s", stripe_response.get("error"))
-        return self.async_abort(reason="stripe_failed")
+        if not checkout_url:
+            return self.async_abort(reason="stripe_failed")
+
+        # Start background polling for subscription activation
+        pending_user = self._pending_user or {
+            "uuid": user_uuid,
+            "username": user_data.get("username", ""),
+            "email": user_data.get("email", ""),
+            "ezlo_id": user_data.get("ezlo_id", ""),
+        }
+        self.hass.async_create_task(
+            self._poll_payment_and_login(
+                user_uuid,
+                token,
+                tunnel_token,
+                pending_user,
+            )
+        )
+        return self.async_show_form(
+            step_id="subscribe",
+            description_placeholders={"url": checkout_url},
+            data_schema=vol.Schema({}),
+        )
 
     # ── Successful login handler ─────────────────────────────────
 
@@ -505,7 +541,11 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         tunnel_token: str | None,
         user_info: dict,
     ):
-        """Background task to poll payment status and login."""
+        """Background task to poll subscription status and complete login.
+
+        Completes login once Stripe webhook has flipped the subscription
+        to trialing or active.
+        """
         timeout = 15 * 60  # 15 minutes
         interval = 5  # seconds
         attempts = timeout // interval
@@ -513,17 +553,26 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             await asyncio.sleep(interval)
             status_response = await get_subscription_status(self.hass, user_uuid)
 
-            if status_response.get("success") and status_response.get("is_active"):
-                _LOGGER.info("Subscription activated. Completing login")
+            if not status_response.get("success"):
+                continue
+
+            sub_status = status_response.get("status", "")
+            if sub_status in SUBSCRIPTION_VALID_STATES:
+                _LOGGER.info(
+                    "Subscription is %s. Completing login", sub_status
+                )
+                # Preserve trial_ends_at from API if present
+                trial_ends = status_response.get("end_timestamp") or None
                 await self._handle_successful_login(
                     token,
                     user_info,
                     tunnel_token=tunnel_token,
-                    subscription_status=SUBSCRIPTION_ACTIVE,
+                    subscription_status=sub_status,
+                    trial_ends_at=trial_ends,
                 )
                 return
 
-        _LOGGER.warning("Polling timeout: User did not complete payment")
+        _LOGGER.warning("Polling timeout: subscription did not activate")
 
     # ── View subscription status ─────────────────────────────────
 
@@ -550,21 +599,23 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
             else:
                 status_text = f"Error: {status_response.get('error')}"
 
-        if sub_status == SUBSCRIPTION_TRIAL:
+        if sub_status == SUBSCRIPTION_TRIALING:
             days = _compute_trial_days(trial_ends_at)
             if days is not None:
-                trial_info = f"You are on a free trial with {days} day{'s' if days != 1 else ''} remaining. After the trial ends, you will need to subscribe to continue using remote access."
+                trial_info = f"You are on a free trial with {days} day{'s' if days != 1 else ''} remaining. Your card was saved during checkout and will be charged when the trial ends."
             else:
-                trial_info = "You are currently on a free trial."
-        elif sub_status == SUBSCRIPTION_TRIAL_EXPIRED:
-            trial_info = "Your free trial has expired. Subscribe now to restore remote access."
+                trial_info = "You are currently on a free trial. Your card will be charged when the trial ends."
+        elif sub_status == SUBSCRIPTION_PAST_DUE:
+            trial_info = "Your last payment failed. Update your payment method to restore remote access."
+        elif sub_status == SUBSCRIPTION_CANCELED:
+            trial_info = "Your subscription was canceled. Resubscribe to restore remote access."
 
-        # Show subscribe option if trial or trial_expired
-        if sub_status in (SUBSCRIPTION_TRIAL, SUBSCRIPTION_TRIAL_EXPIRED):
+        # Show resubscribe option only for invalid subscription states
+        if sub_status in SUBSCRIPTION_INVALID_STATES:
             return self.async_show_menu(
                 step_id="view_status",
                 menu_options={
-                    "subscribe": "Subscribe Now",
+                    "subscribe": "Resubscribe",
                     "init": "Back",
                 },
                 description_placeholders={
