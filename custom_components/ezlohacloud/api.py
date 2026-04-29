@@ -229,9 +229,41 @@ async def get_subscription_status(hass: HomeAssistant, user_uuid):
 
         return {"success": False, "error": "No data returned"}
 
+    except httpx.HTTPStatusError as e:
+        _LOGGER.warning(
+            "Subscription status returned %s — treating as still pending",
+            e.response.status_code,
+        )
+        return {"success": False, "error": f"http_{e.response.status_code}"}
     except httpx.RequestError as e:
         _LOGGER.error("Failed to fetch subscription status: %s", e)
         return {"success": False, "error": "Network error"}
+
+
+_INTEGRATION_CONFIG_CACHE: dict | None = None
+
+
+async def get_integration_config(hass: HomeAssistant) -> dict | None:
+    """Fetch public integration config (Stripe price id, etc.) from the backend.
+
+    Cached for the lifetime of the HA process — the values are static per
+    deployment and the call is cheap. Returns None on failure so callers can
+    surface a clean error.
+    """
+    global _INTEGRATION_CONFIG_CACHE  # noqa: PLW0603
+    if _INTEGRATION_CONFIG_CACHE is not None:
+        return _INTEGRATION_CONFIG_CACHE
+
+    client = create_async_httpx_client(hass)
+    try:
+        response = await client.get(f"{API_URL}/integration/config", timeout=5)
+        response.raise_for_status()
+        data = response.json().get("data") or {}
+        _INTEGRATION_CONFIG_CACHE = data
+        return data
+    except (httpx.RequestError, httpx.HTTPStatusError) as e:
+        _LOGGER.error("Failed to fetch integration config: %s", e)
+        return None
 
 
 def decode_jwt_payload(token: str) -> dict:

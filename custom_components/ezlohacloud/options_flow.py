@@ -15,12 +15,12 @@ from .api import (
     authenticate,
     create_stripe_session,
     decode_jwt_payload,
+    get_integration_config,
     get_subscription_status,
     signup,
 )
 from .const import (
     DOMAIN,
-    STRIPE_PRICE_ID,
     SUBSCRIPTION_ACTIVE,
     SUBSCRIPTION_CANCELED,
     SUBSCRIPTION_INVALID_STATES,
@@ -440,14 +440,24 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
         if not user_uuid:
             return self.async_abort(reason="session_expired")
 
-        # If no pre-supplied checkout_url, request a fresh one
+        # If no pre-supplied checkout_url, request a fresh one. Stripe price
+        # id comes from the backend so we don't have to redeploy clients
+        # when it changes.
         if not checkout_url:
+            cfg = await get_integration_config(self.hass)
+            price_id = (cfg or {}).get("stripe_price_id")
+            if not price_id:
+                _LOGGER.error(
+                    "Could not load integration config (price_id missing)"
+                )
+                return self.async_abort(reason="config_unavailable")
+
             back_url = (
                 f"{self._get_base_url()}"
                 "/config/integrations/integration/ezlohacloud"
             )
             stripe_response = await create_stripe_session(
-                self.hass, user_uuid, STRIPE_PRICE_ID, back_url
+                self.hass, user_uuid, price_id, back_url
             )
             if stripe_response.get("success"):
                 checkout_url = stripe_response.get("data", {}).get("checkout_url")

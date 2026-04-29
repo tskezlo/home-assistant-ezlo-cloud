@@ -80,6 +80,7 @@
       "subscription_activated": "Your subscription is now active! Remote access has been configured.\n\n**Remote URL:** [{cloud_url}]({cloud_url})\n\n{trial_info}",
       "stripe_redirect_finished": "Checkout flow completed. Your subscription status will update shortly.",
       "stripe_failed": "Could not start the checkout flow. Please try again later.",
+      "config_unavailable": "Could not reach the Ezlo cloud to load checkout configuration. Please try again later.",
       "session_expired": "Your session has expired. Please log in again."
     },
     "error": {
