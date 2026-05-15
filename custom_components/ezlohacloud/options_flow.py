@@ -23,7 +23,10 @@ from .const import (
     DOMAIN,
     SUBSCRIPTION_ACTIVE,
     SUBSCRIPTION_CANCELED,
+    SUBSCRIPTION_INTERNAL,
     SUBSCRIPTION_INVALID_STATES,
+    SUBSCRIPTION_PARTNER_TRIAL,
+    SUBSCRIPTION_PARTNER_TRIAL_EXPIRED,
     SUBSCRIPTION_PAST_DUE,
     SUBSCRIPTION_TRIALING,
     SUBSCRIPTION_VALID_STATES,
@@ -80,6 +83,16 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 trial_text = f"You are on a free trial with {days} day{'s' if days != 1 else ''} remaining. Your card has been saved and will be charged when the trial ends."
             else:
                 trial_text = "You are on a free trial. Your card has been saved and will be charged when the trial ends."
+        elif sub_status == SUBSCRIPTION_INTERNAL:
+            trial_text = "Internal user — unlimited access. No subscription required."
+        elif sub_status == SUBSCRIPTION_PARTNER_TRIAL:
+            days = _compute_trial_days(trial_ends_at)
+            if days is not None:
+                trial_text = f"Partner trial: {days} day{'s' if days != 1 else ''} remaining. Contact your account manager before it ends."
+            else:
+                trial_text = "Partner trial active. Contact your account manager before it ends."
+        elif sub_status == SUBSCRIPTION_PARTNER_TRIAL_EXPIRED:
+            trial_text = "Your partner trial has expired. Contact your account manager to restore access."
         elif sub_status == SUBSCRIPTION_ACTIVE:
             trial_text = "Your subscription is active."
         elif sub_status == SUBSCRIPTION_PAST_DUE:
@@ -189,6 +202,16 @@ class EzloOptionsFlowHandler(config_entries.OptionsFlow):
                 trial_info = f"Free trial: {days} day{'s' if days != 1 else ''} remaining. Your card will be charged automatically when the trial ends."
             else:
                 trial_info = "You are on a free trial. Your card will be charged automatically when the trial ends."
+        elif sub_status == SUBSCRIPTION_INTERNAL:
+            trial_info = "Internal user — unlimited access. No subscription required."
+        elif sub_status == SUBSCRIPTION_PARTNER_TRIAL:
+            days = _compute_trial_days(trial_ends_at)
+            if days is not None:
+                trial_info = f"Partner trial: {days} day{'s' if days != 1 else ''} remaining. Contact your account manager before it ends."
+            else:
+                trial_info = "Partner trial active. Contact your account manager before it ends."
+        elif sub_status == SUBSCRIPTION_PARTNER_TRIAL_EXPIRED:
+            trial_info = "Your partner trial has expired. Contact your account manager to restore access."
         elif sub_status == SUBSCRIPTION_PAST_DUE:
             trial_info = "Your last payment failed. Update your payment method to restore remote access."
         elif sub_status == SUBSCRIPTION_CANCELED:

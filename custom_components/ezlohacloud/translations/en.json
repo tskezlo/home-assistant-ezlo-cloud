@@ -81,6 +81,7 @@
             "stripe_redirect_finished": "Checkout flow completed. Your subscription status will update shortly.",
             "stripe_failed": "Could not start the checkout flow. Please try again later.",
             "config_unavailable": "Could not reach the Ezlo cloud to load checkout configuration. Please try again later.",
+            "partner_trial_expired": "Your partner trial has expired. Please contact your account manager to extend access.",
             "session_expired": "Your session has expired. Please log in again."
         },
         "error": {
