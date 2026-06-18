@@ -29,8 +29,7 @@ After clicking the button:
 
 1. Download the latest release from the [releases page](https://github.com/tskezlo/home-assistant-ezlo-cloud/releases).
 2. Extract the `ezlohacloud` folder into your Home Assistant `config/custom_components/` directory.
-3. Restart Home Assistant. (Required for manual installs — Home Assistant does not auto-detect files added outside of HACS.)
-4. Continue to [Configuration](#configuration) below.
+3. Continue to [Configuration](#configuration) below — Home Assistant will discover the new integration on demand when you click the configure button. (If you are *updating* an existing install rather than adding a new one, restart Home Assistant first so Python picks up the new code.)
 
 ## Configuration
 
